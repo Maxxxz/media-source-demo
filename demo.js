@@ -29,6 +29,7 @@ class Demo {
       const mediaSource = new MediaSource();
       this.video.src = URL.createObjectURL(mediaSource);
       this.mediaSource = mediaSource;
+
       mediaSource.addEventListener('sourceopen', this.sourceOpen);
     } else {
       console.error('不支持MediaSource');
@@ -36,8 +37,8 @@ class Demo {
     }
   }
 
+  // 不支持MediaSource，则降级普通的video
   commonVideo = () => {
-    // 不支持MediaSource，则降级普通的video
     const source = document.createElement('source');
     source.type = 'video/mp4';
     source.src = this.baseUrl;
@@ -45,37 +46,46 @@ class Demo {
     this.video.appendChild(source);
   }
 
+  // 支持mediasource的，开始拉取数据
   sourceOpen = async () => {
     const sourceBuffer = this.mediaSource.addSourceBuffer(this.mimeCodec);
+    console.log('sourceBuffer', sourceBuffer);
+
     this.sourceBuffer = sourceBuffer;
 
     await this.initVideoLength();
     this.initVideo();
   }
 
+  // 获取视频大小
   initVideoLength = async () => {
-    // 获取视频大小
     const length = await this.fetchVideoLength();
     this.totalLength = length;
   }
 
-
+  // 初始化视频
   initVideo = async () => {
     // 获取初始的视频播放数据
     const initRange = this.calculateRange();
+
     const initData = await this.fetchVideo(initRange);
+    console.log('initData', initData);
+
+    // 更新下载的当前片段，方便计算下一次拉取
     this.updateSegmentStart(initRange);
     this.sourceBuffer.appendBuffer(initData);
 
     this.sourceBuffer.addEventListener("updateend", this.updateFunct, false);
+    // 在 SourceBuffer.appendBuffer() 或 SourceBuffer.remove() 结束后触发。这个事件在 update 后触发。
   }
 
   updateSegmentStart = (range) => {
     const rangeEnd = parseInt(range.split('-')[1]);
     this.segmentStart = rangeEnd + 1;
   }
-
+  // appendBuffer 之后，判断video数据是否处于可播放状态，不可播放的时候继续拉取
   updateFunct = async () => {
+    console.log('updateFunct', this.video.buffered.length)
     if (this.video.buffered.length) {
       // 视频开始能播放后，监听视频的timeupdate来决定是否继续请求数据
       this.sourceBuffer.removeEventListener("updateend", this.updateFunct);
@@ -84,7 +94,9 @@ class Demo {
       // 继续加载初始化数据，直到视频能够播放，才能触发timeupdate事件
       const initRange = this.calculateRange();
       const initData = await this.fetchVideo(initRange);
+       // 更新下载的当前片段，方便计算下一次拉取
       this.updateSegmentStart(initRange);
+
       this.sourceBuffer.appendBuffer(initData);
     }
   }
@@ -135,6 +147,7 @@ class Demo {
 
     const url = this.baseUrl;
     return new Promise((resolve, reject) => {
+      console.log('fetchVideo', range)
       const xhr = new XMLHttpRequest();
       xhr.open('GET', url);
       xhr.setRequestHeader("Range", "bytes=" + range);
@@ -157,6 +170,7 @@ class Demo {
   fetchVideoLength = () => {
     const url = this.baseUrl;
     return new Promise((resolve, reject) => {
+      console.log('fetchVideoLength', url)
       const xhr = new XMLHttpRequest();
       xhr.open("get", url);
       xhr.onprogress = function (event) {
